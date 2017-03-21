@@ -247,6 +247,8 @@ class FolderNode(_Node):
             self.__subnodes.append(subnode)
             setattr(self,subnode_name,subnode)
             
+            # merging intventories
+            
             if hasattr(subnode,'inventory'):
                 try: 
                     self.inventory
@@ -267,7 +269,7 @@ class FolderNode(_Node):
     
 
 class FileNode(_Node):
-    __handled_attributes = ['Subjects','FileName','Type','Items']
+    __handled_attributes = ['Subjects','FileName','Type','Items','Sheet']
     
 #    @property
 #    def hprops(self):
@@ -286,101 +288,67 @@ class FileNode(_Node):
         try:
 
             if node_info['Type'] == 'CSV':
-                self._load_csv(filepath,node_info)
+                items_data = _load_csv(filepath)
                 
             if node_info['Type'] == 'XLS':
-                self._load_xls(filepath,node_info)
+                items_data = _load_xls(filepath,node_info['Sheet'])
                 
             if node_info['Type'] == 'ListLines':
-                self._load_llines(filepath,node_info)
-        
-        except Exception as e:
-            raise type(e)(e.message + '\n When loading data file : ' + filepath)
-                
-        # creating inventory
-        if 'Items' in self._node_info.keys():
-            self.inventory =[[None,self,self._node_info.get('Items')]]
-                
-        
-# below functions can be reduced
+                items_data = _load_llines(filepath)
         
             
+        except Exception as e:
+            raise type(e)(e.message + '\n When loading data file : ' + filepath)
         
+        if node_info['Type'] in ['CSV','XLS','ListLines']:
+            if 'Items' not in node_info.keys():
+                 node_info.update({'Items': items_data.keys()})
+                 
+            assert len(node_info['Items'])>0     
+            
+            if 'Subjects' in node_info.keys():
+                if node_info['Subjects'] in node_info['Items']:
+                    setattr(self,'Subjects',items_data[node_info['Subjects']])
+                    node_info['Items'].remove(node_info['Subjects'])
+                else:
+                    self._load_subjects()
+    
+                assert len(self.Subjects) == len(items_data[items_data.keys()[0]])
+                
+                # creating inventory
+                self.inventory =[[None,self,self._node_info.get('Items')]]
         
-    def _load_csv(self,filepath,node_info):
-        csv_data = pandas.read_csv(filepath)
+            for item in node_info['Items']:
+                setattr(self,item,items_data[item])
         
-        if 'Items' not in node_info.keys():
-            node_info.update({'Items':list(csv_data.columns)})
-        
-        assert len(node_info['Items'])>0
-                  
-        items_data = dict([(item_name,list(csv_data.get(item_name))) \
-                                for item_name in node_info['Items'] ])
-        
-        if 'Subjects' in node_info.keys():
-            if node_info['Subjects'] in node_info['Items']:
-                setattr(self,'Subjects',items_data[node_info['Subjects']])
-                node_info['Items'].remove(node_info['Subjects'])
-            else:
-                self._load_subjects()
 
-            assert len(self.Subjects) == len(items_data[items_data.keys()[0]])
         
-        for item in node_info['Items']:
-            setattr(self,item,items_data[item])
-        
-        
-    def _load_xls(self,filepath,node_info):
-        csv_data = pandas.read_excel(filepath,node_info['Sheet'])
-        
-        if 'Items' not in node_info.keys():
-            node_info.update({'Items':list(csv_data.columns)})
-        
-        assert len(node_info['Items'])>0
-        
-        items_data = dict([(item_name,list(csv_data.get(item_name))) 
-                                for item_name in node_info['Items'] ])
-
-        if 'Subjects' in node_info.keys():
-            if node_info['Subjects'] in node_info['Items']:
-                setattr(self,'Subjects',items_data[node_info['Subjects']])
-                node_info['Items'].remove(node_info['Subjects'])
-            else:
-                self._load_subjects()
-
-            assert len(self.Subjects) == len(items_data[items_data.keys()[0]])
-        
-        for item in node_info['Items']:
-            setattr(self,item,items_data[item])   
-        
-        
-    def _load_llines(self,filepath,node_info):
-        
-        with open(filepath,'rt') as f:
-            lines = f.readlines()
-        lline_data = [eval(k) for k in lines]
-        
-        if 'Items' not in node_info.keys():
-            node_info.update({'Items':lline_data[0]})
-        
-        assert len(node_info['Items'])>0
-        
-        items_data = dict([(item_name,[k[i] for k in lline_data[1:]]) 
+def _load_csv(filepath):       
+    csv_data = pandas.read_csv(filepath)
+    
+    items_data = dict([(item_name,list(csv_data.get(item_name))) \
+                            for item_name in list(csv_data.columns)])
+    return items_data
+                 
+                 
+def _load_xls(filepath,sheet):
+    xls_data = pandas.read_excel(filepath,sheet)
+    items_data = dict([(item_name,list(xls_data.get(item_name))) \
+                            for item_name in list(xls_data.columns)])
+                                
+    return items_data
+    
+    
+def _load_llines(filepath):
+    with open(filepath,'rt') as f:
+        lines = f.readlines()
+    lline_data = [eval(k) for k in lines]
+    
+    items_data = dict([(item_name,[k[i] for k in lline_data[1:]]) 
                                 for i,item_name in enumerate(lline_data[0])])
-        
-        if 'Subjects' in node_info.keys():
-            if node_info['Subjects'] in node_info['Items']:
-                setattr(self,'Subjects',items_data[node_info['Subjects']])
-                node_info['Items'].remove(node_info['Subjects'])
-            else:
-                self._load_subjects()
+                                    
+    return items_data
 
-            assert len(self.Subjects) == len(items_data[items_data.keys()[0]])
-        
-        for item in node_info['Items']:
-            setattr(self,item,items_data[item])
-        
         
 #        
 

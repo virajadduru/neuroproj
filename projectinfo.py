@@ -18,45 +18,20 @@ def load_json(filepath):
         output = json.load(f)
     return output
 
-class ProjectStruct(object):
-    
-    """
-    Creates a project structure depending on specifications in .gdm files.
-    
-        project_dir : folder where you want to start the project structure
-        
-        project_name: Name of the project to open the required .gdm file
-    """
-        
-    
-    def __init__(self, project_dir, project_name):
-        
-        self.path = project_dir
-        self.project_name = project_name
-        self.__create_structure()
-        
 
-    def __create_structure(self):
+        
+def create_project(project_dir, project_fileheader):
         """
         """
-        if not os.path.isdir(self.path):
+        if not os.path.isdir(project_dir):
             raise IOError("Project path must be an existing directory")
-        self.project_node = FolderNode(self.path,self.project_name)
+        return FolderNode(project_dir,project_fileheader)
     
-    
-    @property
-    def inventory(self):
-        if hasattr(self.project_node,'inventory'):
-            print 'Item inventory:'
-            for i,inv in enumerate(self.project_node.inventory):
-                print '\t',i,inv[0],':',inv[-1] 
-        else:
-            print 'No inventory found'
     
     
     
 class _Node(object):
-        
+                    
     def __init__(self, node_dir, project_name, **kwargs):
 
         self.__get_nodeinfo(node_dir,project_name,**kwargs)
@@ -133,13 +108,13 @@ class _Node(object):
     def _get_item(self, item_name,query_subjects,routeselection):
   
         if routeselection == None:
-            item_invindex = [k for k,inv in enumerate(self.inventory) \
+            item_invindex = [k for k,inv in enumerate(self._inventory) \
                                             if item_name in inv[-1]]
             if len(item_invindex)>1:
                 message = 'Multiple locations for item: '+item_name
                 message+= '\nSelect Choices:'
                 for i in item_invindex:
-                    message+= '\n\t'+str(i)+' '+self.inventory[i][0]
+                    message+= '\n\t'+str(i)+' '+self._inventory[i][0]
                 raise Exception(message)
                 
             if len(item_invindex)==0:
@@ -149,13 +124,13 @@ class _Node(object):
             
         else:
             item_invindex = routeselection
-            if item_name not in self.inventory[item_invindex][-1]:
+            if item_name not in self._inventory[item_invindex][-1]:
                 raise Exception('Item: '+item_name+' not found in: '\
-                                    +self.inventory[item_invindex][0])
+                                    +self._inventory[item_invindex][0])
                 
                 
                 
-        selected_node = self.inventory[item_invindex][1]
+        selected_node = self._inventory[item_invindex][1]
         
         node_subjects = getattr(selected_node,'Subjects')
         node_itemvalues = getattr(selected_node,item_name)
@@ -175,18 +150,24 @@ class _Node(object):
                 
         except Exception as e:
             raise type(e)(e.message+'\nFor item: '+item_name+\
-                           ' in location: '+self.inventory[item_invindex][0])
+                           ' in location: '+self._inventory[item_invindex][0])
     
         return item_query
+        
+    @property
+    def inventory(self):
+        if hasattr(self,'_inventory'):
+            print 'Item inventory:'
+            for i,inv in enumerate(self._inventory):
+                print '\t',i,inv[0],':',inv[-1] 
+        else:
+            print 'No inventory found'
     
 
 class FolderNode(_Node):
     
     __handled_attributes = ['Folders','Subjects','Files']
     
-#    @property
-#    def hprops(self):
-#        return self.__handled_attributes
     
     def __init__(self, node_dir, project_name,**kwargs):
         super(FolderNode,self).__init__(node_dir,project_name, 
@@ -217,20 +198,19 @@ class FolderNode(_Node):
             self.__subnodes.append(subnode)
             setattr(self,subnode_name,subnode)
             
-            if hasattr(subnode,'inventory'):
+            if hasattr(subnode,'_inventory'):
                 try: 
-                    self.inventory
+                    self._inventory
                 except AttributeError:
-                    self.inventory = []
-                inventory = subnode.inventory
+                    self._inventory = []
                 
-                for i in inventory:
+                for i in subnode._inventory:
                     if i[0] == None:
                         i[0] = subnode_name
                     else:
                         i[0] = subnode_name+'>'+i[0]
                 
-                self.inventory+=inventory
+                self._inventory+=subnode._inventory
 
     
     def __create_files(self):
@@ -249,21 +229,19 @@ class FolderNode(_Node):
             
             # merging intventories
             
-            if hasattr(subnode,'inventory'):
+            if hasattr(subnode,'_inventory'):
                 try: 
-                    self.inventory
+                    self._inventory
                 except AttributeError:
-                    self.inventory = []
-            
-                inventory = subnode.inventory
+                    self._inventory = []
                 
-                for i in inventory:
+                for i in subnode._inventory:
                     if i[0] == None:
                         i[0] = subnode_name
                     else:
                         i[0] = subnode_name+'>'+i[0]
                 
-                self.inventory+=inventory
+                self._inventory+=subnode._inventory
 
     
     
@@ -316,7 +294,7 @@ class FileNode(_Node):
                 assert len(self.Subjects) == len(items_data[items_data.keys()[0]])
                 
                 # creating inventory
-                self.inventory =[[None,self,self._node_info.get('Items')]]
+                self._inventory =[[None,self,self._node_info.get('Items')]]
         
             for item in node_info['Items']:
                 setattr(self,item,items_data[item])
